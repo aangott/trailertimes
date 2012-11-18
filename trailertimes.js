@@ -3,20 +3,16 @@ if (window.location.host.indexOf('netflix') != -1) {
   chrome.extension.sendMessage('', ''); 
 }
 
-chrome.extension.onMessage.addListener(function(message, sender, sendResponse) {
-    getRTId(message);
+
+// when this extension's item in the context menu is 
+// clicked, background.js sends a message to this script
+// indicating the URL of the item that was right-clicked.
+chrome.extension.onMessage.addListener(function(url, sender, sendResponse) {
+    getRTInfo(url);
   });
 
 
-function getMovieTitle(url) {
-    // find position of '&t=' in url
-    var title = url.substring(url.indexOf('&t=') + 3);
-    title = decodeURIComponent(title);
-    title = title.replace(/\+/g, " ");
-    alert(title);
-}
-
-function getRTId(url) {
+function getRTInfo(url) {
     // note that the title will be URI encoded, which
     // the RT API calls for anyway.
     var title = url.substring(url.indexOf('&t=') + 3);
@@ -24,10 +20,38 @@ function getRTId(url) {
     requested_url += title;
     requested_url += '&page_limit=10&page=1&apikey=de5ugjqstcbpqcsqmcnybuhz';
     get(requested_url, function(response) {
-        var popup = window.open('', 'Trailer');
-        popup.document.write(response);
+        // response is returned as text for some reason,
+        // even though it's JSON. parsing JSON here.
+        getRTId(title, JSON.parse(response));
     });
 }
+
+
+function getRTId(title, response) {
+    // need to URI decode title so it is comparable to the results
+    // returned by RT.
+    var decodedTitle = decodeURI(title).replace(/\+/g, " ");
+    for (var i = 0; i < response.movies.length; i++) {
+        if (response.movies[i].title == decodedTitle) {
+            var RTId = response.movies[i].id;
+            break;
+        }
+    }
+    getTrailerUrl(RTId);
+}
+
+
+function getTrailerUrl (RTId) {
+    var requested_url = 'http://api.rottentomatoes.com/api/public/v1.0/movies/';
+    requested_url += RTId;
+    requested_url += '/clips.json?apikey=de5ugjqstcbpqcsqmcnybuhz';
+    get(requested_url, function(response) {
+        response = JSON.parse(response);
+        var trailerUrl = response.links.alternate;
+        window.open(trailerUrl, '_blank');
+    });
+}
+
 
 // from 'javascript: the definitive guide', pp.500-501
 function get(url, callback) {
@@ -48,5 +72,3 @@ function get(url, callback) {
     };
     request.send(null);    
 }
-
-
